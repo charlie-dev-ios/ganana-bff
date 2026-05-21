@@ -11,8 +11,7 @@ Linear のチケットを起点に、ブランチ作成から PR 作成までを
 
 | 領域 | 一次情報源 |
 |------|-----------|
-| 開発原則（TDD 必須・YAGNI 等） | `docs/constitution.md` |
-| 技術スタック・コーディング規約・テスト規約・Git 規約・開発コマンド | `docs/development.md` |
+| 開発原則（TDD 必須・YAGNI 等）・技術スタック・コーディング規約・テスト規約・Git 規約・開発コマンド | `docs/development.md` |
 | コミット手順・メッセージ生成 | `commit` スキル（`.claude/commands/commit.md`） |
 | コードレビュー観点 | `code-review` スキル（`.claude/skills/code-review/SKILL.md`） |
 
@@ -69,12 +68,20 @@ URL で渡された場合は末尾の `/issue/<ID>/` から ID を抽出。曖�
 
 ## Step 3: ブランチ作成
 
-ブランチ名は以下の優先順位で決定する:
+ブランチ名は `docs/development.md` の Git 規約（`feature/*` / `fix/*`）に従い、必ず次の形式で **自分で組み立てる**:
 
-1. Step 1 で取得した `gitBranchName` があればそれを採用
-2. 無ければ `docs/development.md` の Git 規約（`feature/*` / `fix/*`）に従い、**必ず Linear チケット ID を含める**（例 `feature/cha-123-add-login-page`）
+```
+<feature|fix>/<チケット識別子>-<内容サマリーの英単語数語>
+```
 
-理由: Linear-GitHub 連携はブランチ名のチケット ID で PR を自動紐付けするため、ID を含めることが必須。
+例: `feature/cha-123-add-login-page` / `fix/cha-456-validation-error`
+
+ルール:
+
+- **Step 1 で取得した `gitBranchName` はそのまま使わない**。Linear のデフォルトはユーザー名プレフィックスやチケットタイトル（日本語など非 ASCII 文字）を含み、`feature/*` 規約に反する・GitHub が "hidden characters" 警告を出す等の問題があるため、参考程度に留める
+- **必ず Linear チケット識別子（`cha-123` 形式）を含める** — Linear-GitHub 連携がブランチ名のチケット ID で PR を自動紐付けするため必須
+- **ASCII の小文字英数字とハイフンのみ**を使う。日本語・空白・ユーザー名プレフィックスは含めない
+- 内容サマリーはチケットタイトルを和英訳した簡潔な英単語数語にする（例: 「ログインページを追加」→ `add-login-page`）
 
 ```bash
 git status                                   # クリーンであること
@@ -88,13 +95,13 @@ git switch -c <branch-name> origin/main
 
 ## Step 4: 実装
 
-`docs/constitution.md`（TDD 必須・YAGNI）と `docs/development.md`（コーディング・テスト規約）に従って実装する。本スキルでは順序のみ規定:
+`docs/development.md`（開発原則: TDD 必須・YAGNI、およびコーディング・テスト規約）に従って実装する。本スキルでは順序のみ規定:
 
-1. **Red**: 失敗するテストを書き `bun run test` で落ちることを確認
+1. **Red**: 失敗するテストを書き `go test ./...` で落ちることを確認
 2. **Green**: テストが通る最小実装
 3. **Refactor**: 整理して再度テスト
-4. **品質チェック**: `bun run test` と `bun check` がパスすること（`--no-verify` 等の回避禁止）
-5. **UI 変更時**: `bun dev`（ポート 3030）で起動し手動確認。確認できなかった項目は PR 本文に記載
+4. **品質チェック**: `go test ./...` と `gofmt -l .`・`go vet ./...` がパスすること（チェックの回避禁止）
+5. **サーバ挙動の変更時**: ローカル起動して該当エンドポイントを手動確認。確認できなかった項目は PR 本文に記載
 
 ---
 
@@ -141,11 +148,12 @@ Agent(
 決定した方針に沿って修正する。修正後は **必ず再度** 以下を回す:
 
 ```bash
-bun run test
-bun check
+go test ./...
+gofmt -l .
+go vet ./...
 ```
 
-両方パスしなければ次へ進まない。
+すべてパスしなければ次へ進まない。
 
 ### 5.4 再レビューの判断
 
