@@ -1,9 +1,9 @@
 ---
-description: Constitution に従ってコミットを実行（対話的にファイル選択可能）
-allowed-tools: Bash(git:*), Bash(bun:*)
+description: 規約に従ってコミットを実行（対話的にファイル選択可能）
+allowed-tools: Bash(git:*), Bash(go:*)
 ---
 
-# Constitution準拠コミット
+# 規約準拠コミット
 
 **`../docs/development.md` に記載されているすべてのルールを厳守してコミットを実行してください。**
 
@@ -30,6 +30,6 @@ allowed-tools: Bash(git:*), Bash(bun:*)
 
 ### 5. Commitメッセージの生成
 
-[developoment.md](../docs/development.md)のGit規約を参照してコミットメッセージを生成してください。
+[development.md](../docs/development.md)のGit規約を参照してコミットメッセージを生成してください。
 
 コミットメッセージを生成し、ユーザーの承認を得られた場合はコミットを実行してください。
