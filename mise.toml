@@ -1,0 +1,21 @@
+[tools]
+go = "1.26.3"
+
+[tasks.setup]
+description = "依存関係のダウンロード"
+run = "go mod download"
+
+[tasks.dev]
+description = "開発サーバを起動"
+run = "go run ./cmd/server"
+
+[tasks.test]
+description = "テストを実行"
+run = "go test ./..."
+
+[tasks.check]
+description = "フォーマットと静的解析をチェック"
+run = [
+  'test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: 未フォーマットのファイルがあります"; exit 1; }',
+  "go vet ./...",
+]
