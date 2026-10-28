@@ -2,7 +2,7 @@
 
 Ganana の BFF（Backend For Frontend）。web フロントエンド（ganana-web）と iOS アプリの双方を担う。
 
-コア（勘定系など重いドメイン）は持たず、エッジレイヤーとして薄く保つ。詳細は [docs/architecture.md](./docs/architecture.md) を参照。
+BFF より後ろ（コアとなるバックエンドサービス）を作ることは現時点では考えておらず、ganana-bff がサーバー側の唯一のアプリケーションとしてドメインロジックも担う（[ADR 0003](./docs/adr/0003-no-backend-behind-bff.md)）。詳細は [docs/architecture.md](./docs/architecture.md) を参照。
 
 ## 必要なもの
 

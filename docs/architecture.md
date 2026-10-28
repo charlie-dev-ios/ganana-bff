@@ -4,13 +4,20 @@ Ganana の BFF（Backend For Frontend）のアーキテクチャドキュメン�
 
 ## 役割
 
-Ganana の BFF。コア（勘定系など重いドメイン）は持たず、エッジレイヤーとして薄く保つ。
+Ganana の BFF。**web フロントエンド（ganana-web）と iOS アプリの双方を担う。**
 
-**web フロントエンド（ganana-web）と iOS アプリの双方を担う。**
+**BFF より後ろ（コアとなるバックエンドサービス）を作ることは現時点では考えていない。** ganana-bff が Ganana におけるサーバー側の唯一のアプリケーションであり、ドメインロジックも BFF 自身が持つ。詳細は [ADR 0003](./adr/0003-no-backend-behind-bff.md) を参照。
+
+```
+web（ganana-web） ─┐
+                   ├──▶ ganana-bff ──▶ 外部サービス（Supabase など）
+iOS アプリ ────────┘
+```
 
 - BFF 専用エンドポイント / 画面最適化（画面単位の集約レスポンス・データ整形）
 - 認証・セッション管理（トークン交換・認証中継）
-- 複数 API / 外部サービスの集約・オーケストレーション
+- ドメインロジック（背後にバックエンドを置かないため BFF が持つ）
+- 外部サービスの呼び出し・集約
 
 ## フロントエンド
 
@@ -45,11 +52,11 @@ Supabase Auth を用いた BFF 認証パターン。BFF が認可コードを交
 
 | 項目 | 採用 | 選定理由 |
 | --- | --- | --- |
-| 言語 | Go | クラウドネイティブ / マイクロサービスの事実上の標準。軽量・高速起動でデプロイ先の選択肢が広い。並行処理（goroutine）が複数 API の並列呼び出しに適する。BFF はコアではなくエッジレイヤーであり、Java の重さを持ち込む必要がない |
+| 言語 | Go | クラウドネイティブ / マイクロサービスの事実上の標準。軽量・高速起動でデプロイ先の選択肢が広い。並行処理（goroutine）が外部サービスの並列呼び出しに適する。単一アプリケーションとして小さく始める段階であり、Java の重さを持ち込む必要がない |
 | Web フレームワーク | Gin | Go の Web フレームワークで市場シェア最大。情報量・人材プールが最も厚く、保守性・採用面で有利 |
 | 設定管理 | Viper | Go の設定ライブラリのデファクト |
 | ロギング | `log/slog`（標準ライブラリ） | Go 1.21 以降の標準。構造化ログ |
-| HTTP クライアント | 標準 `net/http` + `golang.org/x/sync/errgroup` | 複数 API の並列呼び出しとエラー集約 |
+| HTTP クライアント | 標準 `net/http` + `golang.org/x/sync/errgroup` | 外部サービスの並列呼び出しとエラー集約 |
 | テスト | 標準 `testing` + testify | アサーションライブラリのデファクト |
 | 認証 | Supabase Auth + 標準ライブラリ | 資格情報の保管・検証を委譲。BFF 側は追加ライブラリなしで実装できる（[ADR 0001](./adr/0001-authentication-provider.md) / [ADR 0002](./adr/0002-session-strategy.md)） |
 
@@ -61,3 +68,4 @@ Supabase Auth を用いた BFF 認証パターン。BFF が認可コードを交
 
 - [ADR 0001](./adr/0001-authentication-provider.md) — 認証基盤に Supabase Auth を採用する
 - [ADR 0002](./adr/0002-session-strategy.md) — BFF セッションを封緘クッキー方式とし、web / iOS を同一 BFF で扱う
+- [ADR 0003](./adr/0003-no-backend-behind-bff.md) — BFF の背後にバックエンドを置かず、BFF をサーバー側の唯一のアプリケーションとする
