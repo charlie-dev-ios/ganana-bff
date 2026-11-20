@@ -79,6 +79,28 @@ curl localhost:8080/health
 事前に Supabase プロジェクト側で Google プロバイダを有効化し、`GANANA_AUTH_CALLBACK_URL`
 を Redirect URL 許可リストへ登録しておく必要がある。
 
+## Supabase のデプロイ
+
+`supabase/migrations/` の migration は GitHub Actions（[`.github/workflows/supabase.yml`](./.github/workflows/supabase.yml)）で自動反映する。
+
+| タイミング | 動作 |
+| --- | --- |
+| `main` 向け PR | 本番プロジェクトに対して `supabase db push --dry-run` を実行し、適用予定の migration を確認する（DB は変更しない） |
+| `main` へのマージ | 本番プロジェクトへ `supabase db push` で migration を適用する |
+
+いずれも `supabase/` 配下またはワークフロー自体に変更がある場合のみ実行される。
+`config.toml` の内容（Auth 設定など）は反映しない。Auth 設定はダッシュボードで管理する。
+
+リポジトリの Settings > Secrets and variables > Actions に以下を登録する。
+
+| 種別 | 名前 | 内容 |
+| --- | --- | --- |
+| Secret | `SUPABASE_ACCESS_TOKEN` | Supabase の Personal Access Token（Account > Access Tokens） |
+| Secret | `SUPABASE_DB_PASSWORD` | 本番プロジェクトの DB パスワード |
+| Variable | `SUPABASE_PROJECT_ID` | 本番プロジェクトの Project ref（Project Settings > General） |
+
+migration の追加は `supabase migration new <名前>` で行う。
+
 ## ディレクトリ構成
 
 ```
@@ -89,6 +111,7 @@ internal/handler/    HTTP ハンドラ
 internal/middleware/ 共通ミドルウェア（CORS）
 internal/session/    セッションの封緘・開封（AES-256-GCM）
 internal/supabase/   Supabase Auth クライアント
+supabase/            Supabase CLI の設定（config.toml）と migration
 docs/                設計・開発ドキュメント
 ```
 
