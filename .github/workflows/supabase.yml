@@ -1,11 +1,11 @@
 name: Supabase
 
-# PR 時: 本番プロジェクトに対して適用予定の migration を dry-run で確認する（DB は変更しない）
-# main マージ時: 本番プロジェクトへ migration を適用する
+# PR 時: 本番プロジェクトに対して、適用予定の migration（dry-run）と config.toml の差分を表示する（本番は変更しない）
+# main マージ時: 本番プロジェクトへ migration と config.toml の設定を反映する
 #
 # 必要な設定（Settings > Secrets and variables > Actions）
 #   Secrets
-#     SUPABASE_ACCESS_TOKEN: Supabase の Personal Access Token
+#     SUPABASE_ACCESS_TOKEN: Supabase の Personal Access Token（対象プロジェクトに Read-write 権限）
 #     SUPABASE_DB_PASSWORD:  本番プロジェクトの DB パスワード
 #   Variables
 #     SUPABASE_PROJECT_ID:   本番プロジェクトの Project ref（20 文字）
@@ -27,7 +27,7 @@ env:
 
 jobs:
   dry-run:
-    name: Migration dry-run
+    name: Preview
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -55,8 +55,11 @@ jobs:
       - name: Dry-run migrations
         run: supabase db push --remote --password "$SUPABASE_DB_PASSWORD" --dry-run
 
+      - name: Diff config
+        run: supabase config diff
+
   deploy:
-    name: Deploy migrations
+    name: Deploy
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -84,3 +87,6 @@ jobs:
 
       - name: Apply migrations
         run: supabase db push --remote --password "$SUPABASE_DB_PASSWORD" --yes
+
+      - name: Push config
+        run: supabase config push --yes

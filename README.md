@@ -81,23 +81,26 @@ curl localhost:8080/health
 
 ## Supabase のデプロイ
 
-`supabase/migrations/` の migration は GitHub Actions（[`.github/workflows/supabase.yml`](./.github/workflows/supabase.yml)）で自動反映する。
+`supabase/` 配下の migration と設定（`config.toml`）は GitHub Actions（[`.github/workflows/supabase.yml`](./.github/workflows/supabase.yml)）で本番プロジェクトへ自動反映する。
 
 | タイミング | 動作 |
 | --- | --- |
-| `main` 向け PR | 本番プロジェクトに対して `supabase db push --dry-run` を実行し、適用予定の migration を確認する（DB は変更しない） |
-| `main` へのマージ | 本番プロジェクトへ `supabase db push` で migration を適用する |
+| `main` 向け PR | `supabase db push --dry-run` で適用予定の migration を、`supabase config diff` で設定の差分を表示する（本番は変更しない） |
+| `main` へのマージ | `supabase db push` で migration を適用し、`supabase config push` で設定を反映する |
 
 いずれも `supabase/` 配下またはワークフロー自体に変更がある場合のみ実行される。
-`config.toml` の内容（Auth 設定など）は反映しない。Auth 設定はダッシュボードで管理する。
+
+Auth の Redirect URL などの設定は、ダッシュボードではなく `config.toml` を編集して PR で変更する。
+`config.toml` に書いていない項目（Google のクライアントシークレットなど）は反映時も本番の値が保たれる。
+ダッシュボードで直接変更した場合は `supabase config pull` で `config.toml` に取り込むこと（取り込まないと次回の反映で上書きされる）。
 
 リポジトリの Settings > Secrets and variables > Actions に以下を登録する。
 
 | 種別 | 名前 | 内容 |
 | --- | --- | --- |
-| Secret | `SUPABASE_ACCESS_TOKEN` | Supabase の Personal Access Token（Account > Access Tokens） |
+| Secret | `SUPABASE_ACCESS_TOKEN` | Supabase の Personal Access Token（[作成ページ](https://supabase.com/dashboard/account/tokens)。対象プロジェクトに Read-write 権限） |
 | Secret | `SUPABASE_DB_PASSWORD` | 本番プロジェクトの DB パスワード |
-| Variable | `SUPABASE_PROJECT_ID` | 本番プロジェクトの Project ref（Project Settings > General） |
+| Variable | `SUPABASE_PROJECT_ID` | 本番プロジェクトの Project ref（`uhitgoiltoqygdwdskll`） |
 
 migration の追加は `supabase migration new <名前>` で行う。
 
