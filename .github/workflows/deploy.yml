@@ -1,0 +1,135 @@
+name: Deploy
+
+# main マージ時: テスト → コンテナイメージのビルド → Cloud Run へデプロイ → /health で疎通確認
+# 手動実行（workflow_dispatch）でも同じ流れでデプロイできる
+#
+# 必要な設定（Settings > Secrets and variables > Actions > Variables）
+#   GCP_PROJECT_ID:             GCP のプロジェクト ID
+#   GCP_PROJECT_NUMBER:         GCP のプロジェクト番号（Cloud Run の URL 算出と Workload Identity 連携に使う）
+#   GANANA_SUPABASE_URL:        Supabase プロジェクトの URL
+#   GANANA_SUPABASE_ANON_KEY:   Supabase の publishable（anon）キー（公開前提の値のため Variable とする）
+#   GANANA_POST_LOGIN_REDIRECT: ログイン完了後にブラウザを送る先（任意。未設定なら BFF の /auth/me）
+#   GANANA_COOKIE_DOMAIN:       セッションクッキーの Domain 属性（任意）
+#   GANANA_ALLOWED_ORIGINS:     CORS で許可するオリジン（任意。カンマ区切り）
+#
+# GANANA_SESSION_KEY は GitHub に置かず、Secret Manager の ganana-bff-session-key を Cloud Run が注入する。
+# GCP 側の初期設定は README の「Cloud Run のデプロイ」を参照。
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "supabase/**"
+      - ".claude/**"
+      - ".github/workflows/supabase.yml"
+  workflow_dispatch:
+
+env:
+  REGION: asia-northeast1
+  SERVICE: ganana-bff
+  REPOSITORY: ganana-bff
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; echo "gofmt: 未フォーマットのファイルがあります"; exit 1; }
+          go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+  deploy:
+    name: Deploy
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # 本番へのデプロイは直列化し、途中で打ち切らない
+    concurrency:
+      group: cloud-run-deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # Workload Identity 連携で GCP の短期トークンを得るため
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      PROJECT_NUMBER: ${{ vars.GCP_PROJECT_NUMBER }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          service_account: ganana-bff-deployer@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push image
+        id: image
+        run: |
+          image="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE}:${GITHUB_SHA}"
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+          docker build -t "$image" .
+          docker push "$image"
+          echo "ref=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        env:
+          IMAGE: ${{ steps.image.outputs.ref }}
+          SUPABASE_URL: ${{ vars.GANANA_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.GANANA_SUPABASE_ANON_KEY }}
+          POST_LOGIN_REDIRECT: ${{ vars.GANANA_POST_LOGIN_REDIRECT }}
+          COOKIE_DOMAIN: ${{ vars.GANANA_COOKIE_DOMAIN }}
+          ALLOWED_ORIGINS: ${{ vars.GANANA_ALLOWED_ORIGINS }}
+        run: |
+          # Cloud Run の既定 URL は https://<サービス名>-<プロジェクト番号>.<リージョン>.run.app で決まる
+          url="https://${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
+
+          # 値にカンマを含む ALLOWED_ORIGINS を渡すため、区切り文字を ^@^ に変更する
+          env_vars="^@^GANANA_SUPABASE_URL=${SUPABASE_URL}"
+          env_vars+="@GANANA_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}"
+          env_vars+="@GANANA_AUTH_CALLBACK_URL=${url}/auth/callback"
+          env_vars+="@GANANA_POST_LOGIN_REDIRECT=${POST_LOGIN_REDIRECT:-${url}/auth/me}"
+          env_vars+="@GANANA_COOKIE_DOMAIN=${COOKIE_DOMAIN}"
+          env_vars+="@GANANA_ALLOWED_ORIGINS=${ALLOWED_ORIGINS}"
+
+          gcloud run deploy "$SERVICE" \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --image "$IMAGE" \
+            --service-account "ganana-bff-runtime@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --allow-unauthenticated \
+            --min-instances 0 \
+            --max-instances 2 \
+            --set-env-vars "$env_vars" \
+            --set-secrets "GANANA_SESSION_KEY=ganana-bff-session-key:latest" \
+            --quiet
+
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          body="$(curl -fsS --retry 5 --retry-delay 3 --retry-all-errors "${URL}/health")"
+          echo "$body"
+          test "$body" = '{"status":"ok"}'

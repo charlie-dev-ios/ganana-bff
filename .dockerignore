@@ -1,0 +1,10 @@
+.git
+.github
+.claude
+docs
+supabase
+*.md
+.env
+.env.local
+bin/
+coverage.out
