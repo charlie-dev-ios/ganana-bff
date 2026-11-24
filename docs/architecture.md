@@ -55,9 +55,14 @@ Supabase Auth を用いた BFF 認証パターン。BFF が認可コードを交
 
 ## デプロイ
 
-（未定 — 言語選定上はサーバーレス / コンテナ常駐のいずれも可能）
+Cloud Run（`asia-northeast1`）にコンテナとしてデプロイする。`main` へのマージで GitHub Actions がテスト・ビルド・デプロイを行い、GCP へは Workload Identity 連携で認証する。セッション鍵は Secret Manager から注入する。
+
+現時点では Cloud Run の既定 URL（`*.run.app`）で BFF 単体を公開している。web との結合には独自ドメインへの割り当てが必要となる（[ADR 0002](./adr/0002-session-strategy.md) の同一ドメイン前提）。
+
+選定理由は [ADR 0003](./adr/0003-deploy-target.md) を参照。手順は [README](../README.md#cloud-run-のデプロイ) を参照。
 
 ## ADR
 
 - [ADR 0001](./adr/0001-authentication-provider.md) — 認証基盤に Supabase Auth を採用する
 - [ADR 0002](./adr/0002-session-strategy.md) — BFF セッションを封緘クッキー方式とし、web / iOS を同一 BFF で扱う
+- [ADR 0003](./adr/0003-deploy-target.md) — BFF のデプロイ先を Cloud Run とする
