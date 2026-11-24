@@ -1,0 +1,92 @@
+name: Supabase
+
+# PR 時: 本番プロジェクトに対して、適用予定の migration（dry-run）と config.toml の差分を表示する（本番は変更しない）
+# main マージ時: 本番プロジェクトへ migration と config.toml の設定を反映する
+#
+# 必要な設定（Settings > Secrets and variables > Actions）
+#   Secrets
+#     SUPABASE_ACCESS_TOKEN: Supabase の Personal Access Token（対象プロジェクトに Read-write 権限）
+#     SUPABASE_DB_PASSWORD:  本番プロジェクトの DB パスワード
+#   Variables
+#     SUPABASE_PROJECT_ID:   本番プロジェクトの Project ref（20 文字）
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase.yml"
+  push:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase.yml"
+
+env:
+  SUPABASE_CLI_VERSION: 3.2.0
+
+jobs:
+  dry-run:
+    name: Preview
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Link project
+        # link 経由で接続すると IPv4 の connection pooler が使われる（GitHub ホストランナーは IPv6 非対応）
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Show migration status
+        run: supabase migration list --remote --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Dry-run migrations
+        run: supabase db push --remote --password "$SUPABASE_DB_PASSWORD" --dry-run
+
+      - name: Diff config
+        run: supabase config diff
+
+  deploy:
+    name: Deploy
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # 本番への適用は直列化し、途中で打ち切らない
+    concurrency:
+      group: supabase-deploy-production
+      cancel-in-progress: false
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Link project
+        # link 経由で接続すると IPv4 の connection pooler が使われる（GitHub ホストランナーは IPv6 非対応）
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Apply migrations
+        run: supabase db push --remote --password "$SUPABASE_DB_PASSWORD" --yes
+
+      - name: Push config
+        run: supabase config push --yes
